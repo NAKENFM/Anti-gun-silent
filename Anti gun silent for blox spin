@@ -1,0 +1,79 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
+
+local function notify(text, duration)
+    duration = duration or 3
+    StarterGui:SetCore("SendNotification", {
+        Title = "Anti Gun Silent",
+        Text = text,
+        Duration = duration,
+    })
+end
+
+-- ฟังก์ชันสแกนหา RemoteEvent ในโฟลเดอร์ต่าง ๆ
+local function scanForRemoteEvents()
+    local candidates = {}
+
+    local function scanFolder(folder)
+        for _, child in pairs(folder:GetChildren()) do
+            if child:IsA("RemoteEvent") then
+                table.insert(candidates, child)
+            elseif child:IsA("Folder") or child:IsA("Model") then
+                scanFolder(child)
+            end
+        end
+    end
+
+    scanFolder(ReplicatedStorage)
+    scanFolder(Workspace)
+    scanFolder(Players)
+
+    return candidates
+end
+
+local remoteEvents = scanForRemoteEvents()
+
+if #remoteEvents == 0 then
+    warn("ไม่พบ RemoteEvent ใด ๆ ใน ReplicatedStorage, Workspace หรือ Players")
+    notify("ไม่พบ RemoteEvent ใด ๆ ในเกม", 5)
+    return
+end
+
+-- แสดงชื่อ RemoteEvent ทั้งหมดที่เจอ
+print("พบ RemoteEvent ทั้งหมดในเกม:")
+for i, evt in ipairs(remoteEvents) do
+    print(i..". "..evt:GetFullName())
+    notify("พบ RemoteEvent: "..evt.Name, 2)
+end
+
+-- สมมุติใช้ RemoteEvent ตัวแรกที่เจอ (คุณอาจแก้ให้เลือกเองทีหลัง)
+local fireEvent = remoteEvents[1]
+
+local lastShotTime = {}
+
+fireEvent.OnClientEvent:Connect(function(attacker, hitPart, damage)
+    local now = tick()
+
+    if lastShotTime[attacker] and (now - lastShotTime[attacker]) < 0.1 then
+        print("บล็อกยิงถี่จาก", attacker.Name)
+        notify("บล็อกยิงถี่จาก "..attacker.Name, 3)
+        return
+    end
+
+    lastShotTime[attacker] = now
+
+    if hitPart and not hitPart:IsDescendantOf(Character) then
+        print("บล็อก Gun Silent ยิงจาก", attacker.Name)
+        notify("บล็อก Gun Silent ยิงจาก "..attacker.Name, 3)
+        return
+    end
+
+    if hitPart and hitPart:IsDescendantOf(Character) then
+        Humanoid:TakeDamage(damage)
+    end
+end)
